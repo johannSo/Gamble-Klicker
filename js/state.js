@@ -218,6 +218,9 @@ GK.i18n = GK.i18n || { add() {}, addHtml() {}, apply() {}, set() {}, lang: 'de' 
     if (data.casino && !data.casino.stats && data.casino.rounds > 0) GK.state.casino.statsSince = Date.now();
     GK.state.ui = Object.assign({ tab: 'clicker' }, data.ui);
     GK.state.settings = Object.assign(createDefaultSettings(), data.settings);
+    // Wer schon spielt (Spielstand ohne gespeicherte Sprache), hat bisher Deutsch gesehen und behält es –
+    // nur ganz neue Spieler bekommen die Sprache ihres Browsers
+    if (!data.settings || (data.settings.lang !== 'de' && data.settings.lang !== 'en')) GK.state.settings.lang = 'de';
     GK.state.prestige = Object.assign({ points: 0, journeys: 0 }, data.prestige);
     GK.state.cosmetics = Object.assign(createDefaultCosmetics(), data.cosmetics);
     GK.state.kraken = Object.assign(createDefaultKraken(), data.kraken);
