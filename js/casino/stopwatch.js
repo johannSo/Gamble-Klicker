@@ -68,6 +68,7 @@ GK.i18n.add({
     { max: 6, mult: 0.2, icon: '🙂', text: 'Fast getroffen.' },
   ];
   const MISS = { max: Infinity, mult: 0, icon: '💨', text: 'Daneben.' };
+  const ACHIEVEMENT_MAX = 3; // Erfolg „Gutes Timing“: höchstens so viele Hundertstel daneben
 
   let els = {};
   let betControl;
@@ -149,10 +150,8 @@ GK.i18n.add({
     cancelAnimationFrame(frame);
     s.last = { target: r.target, shown, diff, bet: r.bet, payout, late: !!late };
     if (!late && (s.best == null || Math.abs(diff) < s.best)) s.best = Math.abs(diff);
-    if (t.max === 0) {
-      s.exact++;
-      GK.unlockAchievement('stopwatchExact');
-    }
+    if (t.max === 0) s.exact++;
+    if (!late && Math.abs(diff) <= ACHIEVEMENT_MAX) GK.unlockAchievement('stopwatchExact');
     GK.casino.payout(payout);
     GK.casino.record('stopwatch', r.bet, payout, late
       ? GK.t('Ziel {time} s · nicht gestoppt', { time: fmt(r.target) })
@@ -335,5 +334,5 @@ GK.i18n.add({
   });
 
   // Für Tests
-  GK.casino.stopwatchMath = { TABLE, MIN_TARGET, MAX_TARGET, tier, centis, fmt, expected };
+  GK.casino.stopwatchMath = { TABLE, MIN_TARGET, MAX_TARGET, ACHIEVEMENT_MAX, tier, centis, fmt, expected };
 })();
