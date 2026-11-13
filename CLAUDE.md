@@ -4,6 +4,13 @@ Browser-Spiel (Cookie Clicker + Casino) von **Rafaelo28**. Reines HTML, CSS und 
 ohne Framework und ohne Build-Schritt – `index.html` im Browser öffnen genügt.
 Online über GitHub Pages aus `main`: https://rafaelo28.github.io/Gamble-Klicker/
 
+## Umzug auf Next.js (läuft)
+
+Das Spiel wird Stück für Stück auf **Next.js 16 + React 19 + TypeScript** umgebaut, in [`web/`](web/README.md).
+Bis der Umzug fertig ist, bleibt das bisherige Spiel im Hauptordner unverändert online und alle Regeln unten gelten
+dafür weiter. Wer etwas in `web/` ändert, liest zuerst [`web/README.md`](web/README.md) (Aufbau, Stand, Rezept).
+Tests dort: `cd web && npm test && npm run typecheck && npm run build`.
+
 ## Ausführliche Doku
 
 Unter [`docs/`](docs/README.md) steht für jeden Bereich, wie er aufgebaut ist, mit Rezepten und Stolperfallen.

@@ -1,0 +1,21 @@
+/* Ergänzungen für die Next.js-Fassung */
+
+/* Bis der Spielstand geladen ist (ein paar Millisekunden): nur die Münze in der Mitte */
+.boot-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+}
+.boot-screen .logo-coin {
+  font-size: 2rem;
+}
+
+/* Platzhalter für Bereiche, die noch umziehen */
+.moving-tab {
+  max-width: 640px;
+  margin: 48px auto;
+  text-align: center;
+  display: grid;
+  gap: 16px;
+  justify-items: center;
+}
