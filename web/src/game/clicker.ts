@@ -271,7 +271,9 @@ export function getCpsPermanent(): number {
 
 // Klickkraft ohne Combo und Krit: Grundwert plus Anteil vom Einkommen (Klick-Investment …).
 // Die frühen „Klickkraft ×2“ vervielfachen nur den Grundwert, die späten („all“) auch den Einkommens-Anteil.
-export function getClickPower(upgrades: readonly string[] = getState().upgrades): number {
+// permanent: ohne zeitlich begrenzte Buffs (Klickfieber, Goldrausch) – für Belohnungen, die sonst mit einem
+// gerade laufenden Buff viel größer ausfielen (Tagesaufgaben, Kraken-Beute, Schatzfund)
+export function getClickPower(upgrades: readonly string[] = getState().upgrades, permanent = false): number {
   let mult = 1;
   let allMult = 1;
   let cpsShare = 0;
@@ -284,8 +286,11 @@ export function getClickPower(upgrades: readonly string[] = getState().upgrades)
     }
     if (u.type === 'clickCps') cpsShare += u.value;
   }
-  return (mult * permanentMult() + getCps() * cpsShare * allMult) * buffMult('click') * bossClickMult();
+  const cps = permanent ? getCpsPermanent() : getCps();
+  return (mult * permanentMult() + cps * cpsShare * allMult) * (permanent ? 1 : buffMult('click')) * bossClickMult();
 }
+
+export const getClickPowerPermanent = () => getClickPower(getState().upgrades, true);
 
 // Wie viel mehr pro Klick brächte ein Klick-Upgrade? (Anzeige auf der Kachel)
 export function upgradeClickGain(u: Upgrade): number {
@@ -355,6 +360,7 @@ export function comboActive(now: number): boolean {
 export function resetCombo(): void {
   combo.count = 0;
   combo.last = -Infinity;
+  recentClicks.length = 0;
 }
 
 // ---------- Aktionen ----------
@@ -366,8 +372,16 @@ export interface ClickResult {
   milestone: number | null;   // erreichte Combo-Stufe (25, 50 …), sonst null
 }
 
-// Ein Klick auf die Münze. now: performance.now(); roll: Zufallszahl für den kritischen Treffer
-export function click(now: number, roll = rng.float()): ClickResult {
+// Mehr als 25 Klicks pro Sekunde zählen nicht (schneller tippt niemand – kein Dauerfeuer per Programm)
+export const MAX_CLICKS_PER_SECOND = 25;
+const recentClicks: number[] = [];
+
+// Ein Klick auf die Münze. now: performance.now(); roll: Zufallszahl für den kritischen Treffer.
+// null: zu schnell, der Klick zählt nicht.
+export function click(now: number, roll = rng.float()): ClickResult | null {
+  while (recentClicks.length && now - recentClicks[0] >= 1000) recentClicks.shift();
+  if (recentClicks.length >= MAX_CLICKS_PER_SECOND) return null;
+  recentClicks.push(now);
   const s = getState();
   combo.count = now - combo.last <= COMBO_WINDOW ? combo.count + 1 : 1;
   combo.last = now;

@@ -1,7 +1,7 @@
 // Offline-Einnahmen, während das Spiel geschlossen war (wie js/progress.js:applyOfflineEarnings).
 import { getCpsPermanent, passiveActive } from './clicker.ts';
 import { addTranslations } from './i18n.ts';
-import { earn, getState } from './state.ts';
+import { earn, getState, now as gameNow } from './state.ts';
 
 addTranslations({
   'Willkommen zurück!': 'Welcome back!',
@@ -17,7 +17,7 @@ const OFFLINE_MIN = 60;                 // erst ab einer Minute Abwesenheit
 export interface OfflineResult { seconds: number; amount: number; capped: boolean }
 
 // Einmal beim Start nach dem Laden aufrufen. null, wenn es nichts gab.
-export function applyOfflineEarnings(now = Date.now()): OfflineResult | null {
+export function applyOfflineEarnings(now = gameNow()): OfflineResult | null {
   const seconds = (now - getState().lastSaved) / 1000;
   if (!(seconds >= OFFLINE_MIN) || !passiveActive()) return null;
   const counted = Math.min(seconds, OFFLINE_MAX);

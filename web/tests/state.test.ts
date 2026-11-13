@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { getLang } from '../src/game/i18n.ts';
 import { encode } from '../src/game/savecode.ts';
-import { applyData, canAfford, createDefaultState, earn, exportSave, getState, importSave, spend } from '../src/game/state.ts';
+import { applyData, canAfford, cleanData, createDefaultState, earn, exportSave, getState, importSave, now, spend } from '../src/game/state.ts';
 import { legacyAvailable, loadLegacy } from './legacy.ts';
 
 test('earn und spend', () => {
@@ -53,6 +53,37 @@ test('alter Spielstand: fehlende Felder bekommen Standardwerte', () => {
   assert.equal(s.cosmetics.equipped.theme, 'tavern');
   assert.deepEqual(s.player, { name: 'Käpt’n', avatar: '🦈', fig: '', figOn: false });
   assert.deepEqual((s as unknown as Record<string, unknown>).unbekannt, { bleibt: true }, 'unbekannte Felder bleiben erhalten');
+});
+
+test('Daten von außen werden entschärft', () => {
+  const evil = JSON.parse('{"money": 1, "player": {"name": "<img src=x onerror=alert(1)>"}, "__proto__": {"x": 1}, "friends": {"<b>": {"name": "`a\\"b\'c"}}}');
+  assert.equal(applyData(evil), true);
+  const s = getState();
+  assert.equal(s.player.name, '‹img src=x onerror=alert(1)›');
+  assert.deepEqual(s.friends, { '‹b›': { name: 'ˋa”b’c' } });
+  assert.equal(({} as Record<string, unknown>).x, undefined, 'kein Prototyp verändert');
+  assert.equal(applyData([{ money: 1 }]), false, 'Array ist kein Spielstand');
+  applyData({ money: 1, buffs: 'kaputt', buildings: [1, 2], casino: { games: [], history: {}, vip: -3 }, lastSaved: 'gestern' });
+  const t = getState();
+  assert.deepEqual(t.buffs, []);
+  assert.deepEqual(t.buildings, {});
+  assert.deepEqual(t.casino.games, {});
+  assert.deepEqual(t.casino.history, []);
+  assert.equal(t.casino.vip, 0);
+  assert.ok(t.lastSaved > 0);
+});
+
+test('gleiche Entschärfung wie js/state.js', { skip: !legacyAvailable }, () => {
+  const GK = loadLegacy();
+  const probe = JSON.parse('{"a": "<x>\'\\"`", "b": [1, null, {"<k>": true}], "__proto__": 1, "constructor": 2}');
+  assert.deepEqual(cleanData(probe), GK.cleanData(probe));
+});
+
+test('Spielzeit läuft nie rückwärts und nie vor das letzte Speichern', () => {
+  applyData({ money: 0, lastSaved: Date.now() + 3600e3 });
+  const a = now();
+  assert.ok(a >= getState().lastSaved);
+  assert.ok(now() >= a);
 });
 
 test('Export und Import', () => {

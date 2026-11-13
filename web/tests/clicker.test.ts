@@ -39,14 +39,19 @@ test('Kaufen: Geld, Meilenstein, Upgrade', () => {
 test('Klick, Combo und kritischer Treffer', () => {
   applyData({ money: 0, upgrades: ['crit1'] });
   C.resetCombo();
-  let r = C.click(1000, 0.99);
+  const hit = (t: number, roll: number) => {
+    const res = C.click(t, roll);
+    assert.ok(res, 'Klick zählt');
+    return res;
+  };
+  let r = hit(1000, 0.99);
   assert.equal(r.crit, false);
   assert.equal(r.amount, 1);
-  for (let i = 1; i <= 25; i++) r = C.click(1000 + i * 100, 0.99);
+  for (let i = 1; i <= 25; i++) r = hit(1000 + i * 100, 0.99);
   assert.equal(r.combo, 26);
   assert.equal(r.milestone, 25, 'Combo-Stufe 25');
   assert.ok(close(r.amount, 1.25), 'Combo höchstens +25 %');
-  r = C.click(5000, 0.0);
+  r = hit(5000, 0.0);
   assert.equal(r.combo, 1, 'Pause beendet die Combo');
   assert.equal(r.crit, true);
   assert.equal(r.amount, 10);
@@ -54,6 +59,28 @@ test('Klick, Combo und kritischer Treffer', () => {
   assert.equal(s.totalClicks, 27);
   assert.equal(s.crits, 1);
   assert.equal(s.bestCombo, 26);
+});
+
+test('höchstens 25 Klicks pro Sekunde', () => {
+  applyData({ money: 0 });
+  C.resetCombo();
+  let counted = 0;
+  for (let i = 0; i < 100; i++) if (C.click(10000 + i * 5, 0.99)) counted++;
+  assert.equal(counted, C.MAX_CLICKS_PER_SECOND, 'Dauerfeuer wird gebremst');
+  assert.equal(getState().totalClicks, C.MAX_CLICKS_PER_SECOND);
+  assert.ok(C.click(11000, 0.99), 'eine Sekunde später zählt es wieder');
+});
+
+test('Buffs: Restzeit gedeckelt, unbekannte zählen nicht, permanente Klickkraft ohne Buffs', () => {
+  const now = Date.now();
+  applyData({ money: 0, buffs: [
+    { id: 'clickfever', type: 'click', mult: 25, until: now + 365 * 86400e3 },
+    { id: 'erfunden', type: 'income', mult: 1000, until: now + 60e3 },
+  ] });
+  assert.equal(C.getClickPower(), 25);
+  assert.equal(C.getClickPowerPermanent(), 1);
+  assert.equal(C.getCps(), 0);
+  assert.ok(getState().buffs[0].until <= Date.now() + 20e3 + 50, 'Klickfieber höchstens 20 s');
 });
 
 test('passives Einkommen und Schalter', () => {
@@ -117,6 +144,7 @@ test('gleiche Zahlen wie js/clicker.js', { skip: !legacyAvailable }, () => {
     assert.ok(close(C.getCps(), L.getCps()), `getCps, Runde ${round}`);
     assert.ok(close(C.getCpsPermanent(), L.getCpsPermanent()), `getCpsPermanent, Runde ${round}`);
     assert.ok(close(C.getClickPower(), L.getClickPower()), `getClickPower, Runde ${round}`);
+    assert.ok(close(C.getClickPowerPermanent(), L.getClickPowerPermanent()), `getClickPowerPermanent, Runde ${round}`);
     assert.equal(C.totalBuildings(), L.totalBuildings());
     assert.ok(close(C.buildingsWorth(), L.buildingsWorth()), `buildingsWorth, Runde ${round}`);
     assert.equal(C.UPGRADES.filter(u => !C.hasUpgrade(u.id)).length, L.remainingUpgrades());

@@ -54,6 +54,9 @@ alles wird mit der neuen Sprache neu gezeichnet.
 | Kern: Spielstand, Geld, Zahlenformate, Spielstand-Code, Sprache, Zufall, Symbole | ✅ umgezogen, mit Vergleichstests |
 | Klicker: Münze, Combo, Krit, Gebäude, Upgrades, passives Einkommen, Offline-Einnahmen | ✅ umgezogen, mit Vergleichstests |
 | Statistiken (Klicker-Teil), Sprache, Animationen, Speichern/Export/Import/Zurücksetzen | ✅ |
+| Absicherung aus dem Original (Nov. 2026): Spielzeit-Uhr, Daten von außen entschärfen, Buff-Dauer gedeckelt, höchstens 25 Klicks/s, kein Autoklicker per Taste, nur ein Tab spielt, Fehler legen nur ihren Bereich lahm, defekten Stand aufheben | ✅ |
+| Import sperren bzw. laufende Runden verfallen lassen (`GK.casino.runningRound`/`clearRunning`) | ⏳ mit dem Casino |
+| Content-Security-Policy (`index.html`) | ⏳ Next.js schreibt Inline-Skripte in die Seite; braucht Hashes beim Bauen |
 | Ton (`sound.js`), Partikel (`fx.js`: Münzregen, Funken), Besucherzählung (`analytics.js`) | ⏳ |
 | Fortschritt: Boni/goldene Dublone, große Fahrt, Erfolge, tägliche Aufgaben, Ränge, Schatzkammer | ⏳ (Boni werden schon mitgerechnet) |
 | Abenteuer: Flotte, Bosskampf; Kraken | ⏳ (Schatz- und Trophäen-Boni werden schon mitgerechnet) |

@@ -6,12 +6,13 @@ import { getCps, passiveActive, tick } from '@/game/clicker.ts';
 import { formatDuration, formatNumber } from '@/game/format.ts';
 import { t } from '@/game/i18n.ts';
 import { applyOfflineEarnings } from '@/game/offline.ts';
-import { getState, hasStorage, load, save, setOnSave, type TabId } from '@/game/state.ts';
+import { getState, hasStorage, load, now as gameNow, save, setOnSave, setPaused, type TabId } from '@/game/state.ts';
 import { closeNotice, notify, showNotice, showToast, useGame, useNotices, useToast } from '@/game/store.ts';
 import { BigCoin } from './clicker/BigCoin.tsx';
 import { Shop } from './clicker/Shop.tsx';
 import { Coin, Icon, IconText } from './Icon.tsx';
 import { MovingTab } from './MovingTab.tsx';
+import { Safe, safe } from './Safe.tsx';
 import { StatsTab } from './StatsTab.tsx';
 
 const AUTOSAVE_INTERVAL = 5000;  // ms
@@ -28,8 +29,9 @@ const TABS: { id: TabId; icon: string; label: string }[] = [
 const TAB_IDS = TABS.map(x => x.id);
 
 // Spielschleife: Einkommen in jedem Bild, Anzeige alle 100 ms, Autosave alle 5 s
-function useGameLoop(onSaved: () => void) {
+function useGameLoop(onSaved: () => void, active: boolean) {
   useEffect(() => {
+    if (!active) return;
     setOnSave(onSaved);
     let lastTick = performance.now();
     let lastRender = 0;
@@ -41,7 +43,7 @@ function useGameLoop(onSaved: () => void) {
       const seconds = Math.min((now - lastTick) / 1000, 1);
       lastTick = now;
       getState().playTime += seconds;
-      tick(seconds);
+      safe('Einkommen', () => tick(seconds));
       if (now - lastRender >= RENDER_INTERVAL) {
         lastRender = now;
         notify();
@@ -52,14 +54,14 @@ function useGameLoop(onSaved: () => void) {
     // Im Hintergrund pausiert der Browser die Schleife: beim Zurückkommen nachholen (bis 8 Stunden)
     function onVisibilityChange() {
       if (document.hidden) {
-        hiddenAt = Date.now();
+        hiddenAt = gameNow();
         save();
       } else if (hiddenAt !== null) {
-        const seconds = Math.min((Date.now() - hiddenAt) / 1000, MAX_CATCH_UP);
+        const seconds = Math.min((gameNow() - hiddenAt) / 1000, MAX_CATCH_UP);
         hiddenAt = null;
         if (seconds > 1) {
           getState().playTime += seconds;
-          tick(seconds);
+          safe('Einkommen', () => tick(seconds));
         }
         lastTick = performance.now();
         notify();
@@ -79,7 +81,7 @@ function useGameLoop(onSaved: () => void) {
       window.removeEventListener('beforeunload', save);
       setOnSave(null);
     };
-  }, [onSaved]);
+  }, [onSaved, active]);
 }
 
 function Header({ saved }: { saved: boolean }) {
@@ -121,6 +123,57 @@ function Overlays() {
   );
 }
 
+// ---------- Nur ein Tab spielt ----------
+// Zwei offene Tabs speichern abwechselnd ihren eigenen Stand – das verliert Fortschritt und ließe sich nutzen,
+// um Verluste zurückzuspulen. Darum spielt immer der zuletzt geöffnete Tab; andere Tabs speichern nichts mehr
+// und zeigen eine Pause-Seite (wie js/main.js). Eigener Schlüssel: das bisherige Spiel hat einen eigenen Stand.
+const TAB_KEY = 'gamble-klicker-next-tab';
+
+function useSingleTab(ready: boolean): boolean {
+  const [paused, setPausedUi] = useState(false);
+  useEffect(() => {
+    if (!ready) return;
+    const tabId = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    try {
+      localStorage.setItem(TAB_KEY, JSON.stringify({ id: tabId, t: Date.now() }));
+    } catch {
+      // ohne Speicher gibt es auch nichts zu überschreiben
+    }
+    function onStorage(e: StorageEvent) {
+      if (e.key !== TAB_KEY || !e.newValue) return;
+      let other: { id?: string } | null = null;
+      try {
+        other = JSON.parse(e.newValue);
+      } catch {
+        return;
+      }
+      if (other && other.id !== tabId) {
+        setPaused(true); // save() schreibt ab jetzt nichts mehr (der andere Tab hat den neueren Stand)
+        setPausedUi(true);
+      }
+    }
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [ready]);
+  return paused;
+}
+
+function PausedPage() {
+  return (
+    <div className="tab-paused">
+      <div className="tab-paused-box">
+        <div className="tab-paused-icon"><Icon name="anchor" /></div>
+        <h2>{t('Gamble Klicker ist in einem anderen Tab offen')}</h2>
+        <p>{t('Damit nichts verloren geht, läuft das Spiel immer nur in einem Tab. Hier ist es pausiert.')}</p>
+        {/* Neu laden: liest den neuesten Stand und übernimmt das Spielen wieder */}
+        <button type="button" className="btn btn-primary btn-big tab-paused-go" onClick={() => location.reload()}>
+          {t('Hier weiterspielen')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function Game() {
   const [ready, setReady] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -157,7 +210,8 @@ export function Game() {
     clearTimeout(savedTimer.current);
     savedTimer.current = setTimeout(() => setSaved(false), 1200);
   }).current;
-  useGameLoop(onSaved);
+  const paused = useSingleTab(ready);
+  useGameLoop(onSaved, ready && !paused);
 
   const s = getState();
   const tab = s.ui.tab;
@@ -197,11 +251,12 @@ export function Game() {
   }
 
   if (!ready) return <div className="boot-screen" aria-busy="true"><span className="logo-coin">D</span></div>;
+  if (paused) return <PausedPage />;
 
   return (
     <>
       <div className="app-header" ref={headerRef}>
-        <Header saved={saved} />
+        <Safe name="Kopfzeile"><Header saved={saved} /></Safe>
         <nav className="tabs">
           {TABS.map(x => (
             <button key={x.id} className={`tab${tab === x.id ? ' active' : ''}`} data-tab={x.id} onClick={() => showTab(x.id)}>
@@ -215,18 +270,18 @@ export function Game() {
         <section id="tab-clicker" className={`tab-panel${tab === 'clicker' ? ' active' : ''}`}>
           {tab === 'clicker' && (
             <div className="clicker-layout">
-              <BigCoin />
-              <Shop />
+              <Safe name="Münze"><BigCoin /></Safe>
+              <Safe name="Klicker"><Shop /></Safe>
             </div>
           )}
         </section>
         {(['casino', 'adventure', 'progress'] as const).map(id => (
           <section key={id} id={`tab-${id}`} className={`tab-panel${tab === id ? ' active' : ''}`}>
-            {tab === id && <MovingTab />}
+            {tab === id && <Safe name={id}><MovingTab /></Safe>}
           </section>
         ))}
         <section id="tab-stats" className={`tab-panel${tab === 'stats' ? ' active' : ''}`}>
-          {tab === 'stats' && <StatsTab />}
+          {tab === 'stats' && <Safe name="Statistiken"><StatsTab /></Safe>}
         </section>
       </main>
 

@@ -179,10 +179,51 @@ function isObject(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === 'object' && !Array.isArray(v);
 }
 
+// ---------- Spielzeit-Uhr ----------
+// Die Geräte-Uhr lässt sich leicht verstellen (Buffs für immer, Offline-Einkommen mehrfach …). now() läuft darum
+// nie rückwärts: Zwischen zwei Aufrufen vergeht mindestens die echte Zeit (performance.now), und sie beginnt nie
+// vor dem letzten Speichern (lastSaved). Wie GK.now() in js/state.js.
+const perfNow = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+let clockT = 0;
+let clockP = 0;
+
+export function now(): number {
+  const p = perfNow();
+  const floor = Number(state?.lastSaved) > 0 ? Number(state.lastSaved) : 0;
+  const t = Math.max(clockT ? clockT + Math.max(0, p - clockP) : 0, Date.now(), floor);
+  clockT = t;
+  clockP = p;
+  return t;
+}
+
+// ---------- Daten von außen entschärfen ----------
+// Ein Spielstand-Code (Import) kann beliebigen Inhalt haben. In allen Texten und Schlüsseln werden die Zeichen,
+// mit denen man HTML einschleusen kann, durch gleich aussehende harmlose ersetzt; Schlüssel wie __proto__ fallen
+// weg. React schützt die Anzeige ohnehin – der Stand bleibt aber mit dem alten Spiel austauschbar, und das
+// zeichnet viele Werte über innerHTML. Wie GK.cleanData in js/state.js.
+const UNSAFE = /[<>"'`]/g;
+const SAFE: Record<string, string> = { '<': '‹', '>': '›', '"': '”', "'": '’', '`': 'ˋ' };
+const BAD_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+export function cleanData(value: unknown, depth = 0): unknown {
+  if (typeof value === 'string') return value.replace(UNSAFE, c => SAFE[c]);
+  if (value === null || typeof value !== 'object') return typeof value === 'function' || typeof value === 'symbol' ? undefined : value;
+  if (depth > 60) return null;
+  if (Array.isArray(value)) return value.map(v => cleanData(v, depth + 1));
+  const out: Record<string, unknown> = {};
+  for (const k of Object.keys(value)) {
+    if (BAD_KEYS.has(k)) continue;
+    out[cleanData(k) as string] = cleanData((value as Record<string, unknown>)[k], depth + 1);
+  }
+  return out;
+}
+
 // Übernimmt geladene Daten; fehlende Felder (z. B. aus älteren Versionen) bekommen Standardwerte.
 // Gleiche Regeln wie js/state.js:applyData – geprüft wird nur, ob money eine endliche Zahl ist.
-export function applyData(data: unknown): boolean {
-  if (!isObject(data) || typeof data.money !== 'number' || !isFinite(data.money)) return false;
+export function applyData(raw: unknown): boolean {
+  if (!isObject(raw)) return false;
+  const data = cleanData(raw) as Record<string, unknown>;
+  if (typeof data.money !== 'number' || !isFinite(data.money)) return false;
   const d = data as Partial<GameState> & Record<string, unknown>;
   const s: GameState = Object.assign(createDefaultState(), d, { version: SAVE_VERSION });
   s.casino = Object.assign(createDefaultCasino(), d.casino);
@@ -214,11 +255,17 @@ export function applyData(data: unknown): boolean {
     if (old) Object.assign(s.player, { name: old.name || '', avatar: old.avatar || '' });
   }
   if (typeof d.allTimeEarned !== 'number') s.allTimeEarned = s.totalEarned;
-  // Zusätzliche Typ-Reparaturen für Felder, die der Klicker hier direkt benutzt
-  if (!isObject(s.buildings)) s.buildings = {};
+  // Falsche Typen aus beschädigten oder bearbeiteten Ständen (sonst bricht später das Zeichnen ab)
   if (!Array.isArray(s.upgrades)) s.upgrades = [];
   if (!Array.isArray(s.achievements)) s.achievements = [];
   if (!Array.isArray(s.buffs)) s.buffs = [];
+  s.buffs = s.buffs.filter(b => isObject(b) && typeof b.id === 'string');
+  if (!isObject(s.buildings)) s.buildings = {};
+  if (!isObject(s.casino.games)) s.casino.games = {};
+  if (!isObject(s.casino.stats)) s.casino.stats = {};
+  if (!Array.isArray(s.casino.history)) s.casino.history = [];
+  if (!Number.isInteger(s.casino.vip) || s.casino.vip < 0) s.casino.vip = 0;
+  if (!(Number(s.lastSaved) > 0)) s.lastSaved = Date.now();
   state = s;
   setLang(s.settings.lang);
   return true;
@@ -267,14 +314,23 @@ export function hasStorage(): boolean {
   return storageAvailable;
 }
 
+// Pausiert: Das Spiel läuft in einem anderen Tab weiter – dieser Tab darf nichts überschreiben
+let paused = false;
+export function setPaused(on: boolean): void {
+  paused = on;
+}
+export function isPaused(): boolean {
+  return paused;
+}
+
 let onSave: (() => void) | null = null;
 export function setOnSave(fn: (() => void) | null): void {
   onSave = fn;
 }
 
 export function save(): boolean {
-  if (!hasStorage()) return false;
-  state.lastSaved = Date.now();
+  if (!hasStorage() || paused) return false;
+  state.lastSaved = now();
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify(state));
   } catch (e) {
@@ -299,12 +355,23 @@ export function load(): boolean {
   if (!hasStorage()) return false;
   const raw = readKey(SAVE_KEY) ?? readKey(LEGACY_SAVE_KEY);
   if (!raw) return false;
+  let ok = false;
   try {
-    return applyData(JSON.parse(raw));
+    ok = applyData(JSON.parse(raw));
   } catch (e) {
     console.warn('Spielstand beschädigt, starte neu:', e);
-    return false;
   }
+  // Nicht ladbar: den Stand aufheben, bevor das automatische Speichern ihn überschreibt
+  if (!ok) {
+    try {
+      localStorage.setItem(SAVE_KEY + '-defekt', raw);
+    } catch {
+      // kein Platz – dann eben nicht
+    }
+    state = createDefaultState();
+    setLang(state.settings.lang);
+  }
+  return ok;
 }
 
 export function exportSave(): string {

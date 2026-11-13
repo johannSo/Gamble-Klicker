@@ -40,6 +40,7 @@ export function BigCoin() {
     const rect = layer.getBoundingClientRect();
     const local = { x: pos.x - rect.left, y: pos.y - rect.top };
     const result = click(performance.now());
+    if (!result) return; // zu schnell (mehr als 25 Klicks pro Sekunde)
 
     layerRing(layer, local.x, local.y);
     if (!reducedEffects() && coin.animate) {
@@ -78,7 +79,8 @@ export function BigCoin() {
     <div className="click-area">
       <div className={`coin-stage coin-skin-${coinSkin}`}>
         <button ref={coinRef} id="big-coin" className="big-coin" aria-label={t('Dublone klicken')}
-          onPointerDown={onPointerDown} onClick={onKeyClick}>
+          onPointerDown={onPointerDown} onClick={onKeyClick}
+          onKeyDown={e => { if (e.repeat) e.preventDefault(); }}>
           <span className="big-coin-inner">D</span>
         </button>
       </div>

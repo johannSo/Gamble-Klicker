@@ -1,7 +1,7 @@
 // Dauerhafte und zeitlich begrenzte Boni, die der Klicker braucht.
 // Rechnet wie js/progress.js (permanentMult, buffMult), js/fleet.js (incomeMult) und js/boss.js (clickMult).
 // Die Module selbst (große Fahrt, Flotte, Bosskampf) ziehen später um; die Werte stehen schon im Spielstand.
-import { getState, type Buff } from './state.ts';
+import { getState, now as gameNow, type Buff } from './state.ts';
 
 const PRESTIGE_BONUS = 0.1;      // +10 % Einkommen pro Schatzkarte
 const ACHIEVEMENT_BONUS = 0.01;  // +1 % Einkommen pro Erfolg
@@ -35,12 +35,22 @@ export function permanentMult(): number {
   return prestigeMult() * achievementMult() * fleetIncomeMult();
 }
 
-export function activeBuffs(now = Date.now()): Buff[] {
-  return getState().buffs.filter(b => b.until > now);
+// Dauer der zeitlich begrenzten Boni in Sekunden (js/progress.js:BUFFS)
+export const BUFF_SECONDS: Readonly<Record<string, number>> = { goldrush: 60, clickfever: 20, luck: 30 };
+
+// Laufende Buffs. Die Restzeit wird auf die Dauer des Buffs gedeckelt – ein Buff aus einem alten oder
+// bearbeiteten Spielstand kann so nicht ewig halten. Unbekannte Buffs zählen nicht.
+export function activeBuffs(now = gameNow()): Buff[] {
+  return getState().buffs.filter(b => {
+    const seconds = BUFF_SECONDS[b.id];
+    if (!seconds) return false;
+    if (b.until > now + seconds * 1000) b.until = now + seconds * 1000;
+    return b.until > now;
+  });
 }
 
 // Zeitlich begrenzte Boni eines Typs (Goldrausch: 'income', Klickfieber: 'click')
-export function buffMult(type: Buff['type'], now = Date.now()): number {
+export function buffMult(type: Buff['type'], now = gameNow()): number {
   return activeBuffs(now).filter(b => b.type === type).reduce((m, b) => m * b.mult, 1);
 }
 

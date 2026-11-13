@@ -70,6 +70,11 @@ addTranslations({
     'Copy this code and keep it safe. Use “Import” to load it again later (even on another device).',
   'Füge hier deinen Spielstand-Code ein und klicke auf „Laden“. Dein aktueller Fortschritt wird dabei ersetzt.':
     'Paste your save code here and click “Load”. Your current progress will be replaced.',
+  // Nur ein Tab spielt
+  'Gamble Klicker ist in einem anderen Tab offen': 'Gamble Klicker is open in another tab',
+  'Damit nichts verloren geht, läuft das Spiel immer nur in einem Tab. Hier ist es pausiert.':
+    'So that nothing gets lost, the game only runs in one tab at a time. It is paused here.',
+  'Hier weiterspielen': 'Continue playing here',
   // Neue Fassung: noch nicht umgezogene Bereiche
   'Dieser Bereich zieht gerade um': 'This area is moving house',
   'Gamble Klicker wird Stück für Stück auf Next.js umgebaut. Bis dahin findest du diesen Bereich im bisherigen Spiel – dein Spielstand von dort wurde beim ersten Start hierher übernommen.':

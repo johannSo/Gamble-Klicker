@@ -6,7 +6,7 @@ import { getCps, passiveActive, resetCombo, totalBuildings } from '@/game/clicke
 import { formatDuration, formatNumber } from '@/game/format.ts';
 import { t, type Lang } from '@/game/i18n.ts';
 import {
-  exportSave, getState, hasStorage, importSave, resetSave, save, setLanguage, type Effects,
+  exportSave, getState, hasStorage, importSave, now, resetSave, save, setLanguage, type Effects,
 } from '@/game/state.ts';
 import { notify, showToast, useGame } from '@/game/store.ts';
 import { Icon, Money } from './Icon.tsx';
@@ -108,7 +108,7 @@ export function StatsTab() {
       )}
       <p className="muted small">
         {t('Dein Fortschritt wird automatisch alle paar Sekunden, nach jedem Kauf und beim Schließen der Seite in deinem Browser gespeichert. Zuletzt gespeichert:')}{' '}
-        <span id="last-saved">{storage ? t('vor {time}', { time: formatDuration((Date.now() - s.lastSaved) / 1000) }) : t('nicht möglich')}</span>
+        <span id="last-saved">{storage ? t('vor {time}', { time: formatDuration(Math.max(0, now() - s.lastSaved) / 1000) }) : t('nicht möglich')}</span>
       </p>
       <div className="stats-actions">
         <button id="save-btn" className="btn" onClick={() => showToast(save() ? t('Spielstand gespeichert ✅') : t('Speichern nicht möglich ⚠️'))}>
