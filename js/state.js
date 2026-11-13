@@ -192,9 +192,28 @@ GK.i18n = GK.i18n || { add() {}, addHtml() {}, apply() {}, set() {}, lang: 'de' 
     return true;
   };
 
+  // ---------- Spielzeit-Uhr ----------
+  // Die Geräte-Uhr lässt sich leicht verstellen (Buffs für immer, Offline-Einkommen mehrfach, Fahrten sofort
+  // fertig …). GK.now() läuft darum nie rückwärts: Zwischen zwei Aufrufen vergeht mindestens die echte Zeit
+  // (performance.now), und sie beginnt nie vor dem letzten Speichern (lastSaved). Eine vorgestellte Geräte-Uhr
+  // zählt wie Zeit ohne Spiel (lässt sich nicht von echter Abwesenheit unterscheiden); stellt man sie danach
+  // zurück, läuft die Spielzeit einfach weiter – die vorgezogene Zeit ist dann verbraucht.
+  const perfNow = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+  let clockT = 0;
+  let clockP = 0;
+  GK.now = function () {
+    const p = perfNow();
+    const floor = GK.state && Number(GK.state.lastSaved) > 0 ? Number(GK.state.lastSaved) : 0;
+    const t = Math.max(clockT ? clockT + Math.max(0, p - clockP) : 0, Date.now(), floor);
+    clockT = t;
+    clockP = p;
+    return t;
+  };
+
   GK.save = function () {
-    if (!GK.storageAvailable) return false;
-    GK.state.lastSaved = Date.now();
+    // GK.paused: Das Spiel läuft in einem anderen Tab weiter (js/main.js) – dieser Tab darf nichts überschreiben
+    if (!GK.storageAvailable || GK.paused) return false;
+    GK.state.lastSaved = GK.now();
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(GK.state));
     } catch (e) {
@@ -205,9 +224,34 @@ GK.i18n = GK.i18n || { add() {}, addHtml() {}, apply() {}, set() {}, lang: 'de' 
     return true;
   };
 
+  // ---------- Daten von außen entschärfen ----------
+  // Ein Spielstand-Code (Import) und Nachrichten anderer Geräte (Spiele mit Freunden, Poker) können beliebigen
+  // Inhalt haben. Viele Werte landen später in innerHTML – ein präparierter Wert wie '<img onerror=…>' würde
+  // dann fremden Code ausführen. Darum werden in allen Texten und Schlüsseln die Zeichen ersetzt, mit denen
+  // man HTML einschleusen kann, durch gleich aussehende harmlose Zeichen (< > " ' `). Das Spiel selbst speichert
+  // und verschickt nie HTML, es geht also nichts verloren. Schlüssel wie __proto__ fallen weg.
+  const UNSAFE = /[<>"'`]/g;
+  const SAFE = { '<': '‹', '>': '›', '"': '”', "'": '’', '`': 'ˋ' };
+  const BAD_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+  function cleanData(value, depth = 0) {
+    if (typeof value === 'string') return value.replace(UNSAFE, c => SAFE[c]);
+    if (value === null || typeof value !== 'object') return typeof value === 'function' || typeof value === 'symbol' ? undefined : value;
+    if (depth > 60) return null;
+    if (Array.isArray(value)) return value.map(v => cleanData(v, depth + 1));
+    const out = {};
+    Object.keys(value).forEach(k => {
+      if (BAD_KEYS.has(k)) return;
+      out[cleanData(k)] = cleanData(value[k], depth + 1);
+    });
+    return out;
+  }
+  GK.cleanData = cleanData;
+
   // Übernimmt geladene Daten; fehlende Felder (z. B. aus älteren Versionen) bekommen Standardwerte
   function applyData(data) {
-    if (!data || typeof data !== 'object' || typeof data.money !== 'number' || !isFinite(data.money)) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+    data = cleanData(data);
+    if (typeof data.money !== 'number' || !isFinite(data.money)) {
       return false;
     }
     const defaults = createDefaultState();
@@ -245,6 +289,15 @@ GK.i18n = GK.i18n || { add() {}, addHtml() {}, apply() {}, set() {}, lang: 'de' 
     }
     // Ältere Spielstände kennen „insgesamt verdient über alle Fahrten“ noch nicht
     if (typeof data.allTimeEarned !== 'number') GK.state.allTimeEarned = GK.state.totalEarned;
+    // Falsche Typen aus beschädigten oder bearbeiteten Ständen (sonst bricht später das Zeichnen ab)
+    ['buffs', 'upgrades', 'achievements'].forEach(k => { if (!Array.isArray(GK.state[k])) GK.state[k] = []; });
+    GK.state.buffs = GK.state.buffs.filter(b => b && typeof b === 'object' && typeof b.id === 'string');
+    ['buildings'].forEach(k => { if (!GK.state[k] || typeof GK.state[k] !== 'object' || Array.isArray(GK.state[k])) GK.state[k] = {}; });
+    const c = GK.state.casino;
+    ['games', 'stats'].forEach(k => { if (!c[k] || typeof c[k] !== 'object' || Array.isArray(c[k])) c[k] = {}; });
+    if (!Array.isArray(c.history)) c.history = [];
+    if (!Number.isInteger(c.vip) || c.vip < 0) c.vip = 0;
+    if (!(Number(GK.state.lastSaved) > 0)) GK.state.lastSaved = Date.now();
     return true;
   }
 
@@ -257,12 +310,22 @@ GK.i18n = GK.i18n || { add() {}, addHtml() {}, apply() {}, set() {}, lang: 'de' 
       console.warn('Laden fehlgeschlagen:', e);
     }
     if (!raw) return false;
+    let ok = false;
     try {
-      return applyData(JSON.parse(raw));
+      ok = applyData(JSON.parse(raw));
     } catch (e) {
       console.warn('Spielstand beschädigt, starte neu:', e);
-      return false;
     }
+    // Nicht ladbar: den alten Stand aufheben, bevor das automatische Speichern ihn überschreibt
+    if (!ok) {
+      try {
+        localStorage.setItem(SAVE_KEY + '-defekt', raw);
+      } catch (e) {
+        // Kein Platz – dann eben nicht
+      }
+      GK.state = createDefaultState();
+    }
+    return ok;
   };
 
   // Spielstand als Text, z. B. zum Sichern oder Übertragen auf ein anderes Gerät.
@@ -276,6 +339,8 @@ GK.i18n = GK.i18n || { add() {}, addHtml() {}, apply() {}, set() {}, lang: 'de' 
   GK.importSave = function (text) {
     const data = GK.saveCode.decode(text);
     if (!data || !applyData(data)) return false;
+    // Laufende Runden im importierten Stand verfallen (siehe GK.casino.RUNNING)
+    if (GK.casino && GK.casino.clearRunning) GK.casino.clearRunning();
     GK.save();
     return true;
   };

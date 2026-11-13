@@ -589,14 +589,29 @@ Wunsch: Ein Freund hat 7 Mio. Schatzkarten und das Spiel „durchgespielt“ –
   sechs Versuche. Nach jedem Versuch zeigen runde Münzen den Stand je Buchstabe: Gold = richtige Stelle, Blau
   (gestrichelter Rand) = kommt vor, andere Stelle, dunkel = kommt nicht vor. Doppelte Buchstaben zählen nur so oft,
   wie sie in der Parole stehen. Jede Buchstabenfolge darf geraten werden (keine Wörterbuch-Prüfung).
-- Gewinn je Versuch: ×12 · ×3 · ×1,5 · ×1 · ×0,5 · ×0,2, nicht geknackt = Einsatz weg.
+- Gewinn je Versuch: ×8 · ×1,5 · ×0,8 · ×0,4 · ×0,2 · ×0,1, nicht geknackt = Einsatz weg (ursprünglich ×12 · ×3 · ×1,5 ·
+  ×1 · ×0,5 · ×0,2 – beim Mergen gesenkt, siehe unten).
 - Wörter: 330 deutsche (ohne Umlaute/ß) und 263 englische; die Sprache der Parole richtet sich nach der Spielsprache
   beim Start der Runde. Eingabe über die eigene Bildschirmtastatur (QWERTZ bzw. QWERTY, färbt sich mit) oder die
   Tastatur am Rechner (Buchstaben, Eingabe, Rücktaste).
-- Ausgewogen: Ein Rechner, der die ganze Wortliste kennt, kommt auf etwa ×1,45 (Deutsch) bis ×1,6 (Englisch) –
-  das ist die Obergrenze. Durchschnittliche Spieler (meist 4 Versuche) liegen ungefähr beim Einsatz, gute darüber.
+- Ausgewogen: Die Wortliste ist klein und steht im Quelltext. Mit den ursprünglichen Stufen kam ein geschickter Löser
+  mit Listenkenntnis auf ×1,8–1,9 (Gelddrucker). Jetzt: geschickter Löser ×0,91 (Deutsch) bzw. ×0,97 (Englisch),
+  zufällig passend ratend ×0,77–0,84, wer die Liste nicht kennt (meist 4 Versuche) deutlich darunter.
 - Parole und Versuche werden mit der Runde sofort gespeichert (Neuladen kostet nichts); die große Fahrt ist während
   einer Runde gesperrt.
+
+### Pflege: Sicherheitslücken geschlossen ✅
+Gefunden im Prüfbericht von johannSo (PR #52, `docs/EXPLOITS.md`), Befund 1 im Browser nachgestellt:
+- **Befund 1 – präparierter Spielstand-Code führte fremden Code aus.** Viele Werte aus dem Spielstand landen in
+  `innerHTML`; ein Code mit z. B. `mult: '<img onerror=…>'` lief beim Import (und bei jedem Start erneut).
+- **Befund 2 – manipulierter Gastgeber führte Code bei Gästen aus** (Einstellungen, Avatare, Namen).
+- **Behoben:** `GK.cleanData` (`js/state.js`) entschärft alles, was von außen kommt: In Texten und Schlüsseln werden
+  `< > " ' \`` durch gleich aussehende harmlose Zeichen ersetzt, `__proto__`/`constructor`/`prototype` fallen weg.
+  Angewendet in `applyData` (Import und Laden – ein schon „verseuchter“ Spielstand wird beim nächsten Start
+  bereinigt) und in `unpack` aller Netzwerk-Nachrichten (Räume und Poker, beide Richtungen). Das Spiel selbst
+  speichert und verschickt nie HTML, es geht nichts verloren.
+- Test: `tests/security.test.js`; im Browser: Import-Code und „böser Gastgeber“ führen keinen Code mehr aus.
+- Noch offen aus dem Bericht: Befund 3 (Platz eines anderen Gastes übernehmen) und die weiteren Mogel-Befunde.
 
 ## Entscheidungen
 

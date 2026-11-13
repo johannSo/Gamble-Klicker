@@ -59,10 +59,10 @@ assert(P.TRIES === 6 && P.MULTS.length === P.TRIES, 'Sechs Versuche, sechs Stufe
 assert(P.MULTS.every((m, i) => i === 0 || m < P.MULTS[i - 1]), 'Jeder spätere Versuch zahlt weniger');
 assert(P.multiplier(1) === P.MULTS[0] && P.multiplier(6) === P.MULTS[5], 'Multiplikator je Versuch');
 assert(P.multiplier(0) === 0 && P.multiplier(7) === 0, 'Nicht geknackt: nichts');
-assert(P.MULTS[3] <= 1 && P.MULTS[5] < 0.5, 'Ab dem 4. Versuch kein Gewinn mehr');
+assert(P.MULTS[2] < 1 && P.MULTS[5] < 0.5, 'Ab dem 3. Versuch kein Gewinn mehr');
 
-// Ausgewogenheit: Ein Rechner, der die ganze Liste kennt und immer ein noch passendes Wort rät, ist die Obergrenze –
-// er gewinnt, aber nicht maßlos. Wer die Liste nicht kennt (jeder Mensch), liegt deutlich darunter.
+// Ausgewogenheit: Ein Rechner, der die ganze Liste kennt und immer ein noch passendes Wort rät, darf auf Dauer
+// nichts verdienen (sonst wäre die Parole ein Gelddrucker). Wer die Liste nicht kennt, liegt deutlich darunter.
 Object.keys(P.WORDS).forEach(lang => {
   const W = P.WORDS[lang];
   const N = 6000;
@@ -80,7 +80,7 @@ Object.keys(P.WORDS).forEach(lang => {
     }
   }
   assert(solved / N > 0.97, `${lang}: mit den Hinweisen fast immer lösbar (${solved / N})`);
-  assert(back / N > 1.1 && back / N < 1.8, `${lang}: Rechner mit Listenkenntnis ${back / N}`);
+  assert(back / N > 0.6 && back / N < 0.95, `${lang}: Rechner mit Listenkenntnis ${back / N}`);
 });
 
 if (!process.exitCode) console.log('Parole-Tests bestanden');
