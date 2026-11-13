@@ -1,0 +1,5 @@
+/* Gestaltung aus dem bisherigen Spiel (css/style.css, css/icons.css), unverändert übernommen.
+   Neue Regeln der Next.js-Fassung stehen in next.css. */
+@import '../styles/style.css';
+@import '../styles/icons.css';
+@import '../styles/next.css';

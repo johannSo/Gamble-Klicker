@@ -47,8 +47,11 @@ GK.i18n.add({
   const MIN_BET = 10;
   const LENGTH = 5;
   const TRIES = 6;
-  // Multiplikator, wenn die Parole im 1., 2., … 6. Versuch fällt
-  const MULTS = [12, 3, 1.5, 1, 0.5, 0.2];
+  // Multiplikator, wenn die Parole im 1., 2., … 6. Versuch fällt.
+  // Die Wortliste ist klein und steht im Quelltext: Wer sie kennt und geschickt rät, knackt die Parole meist im
+  // 2. oder 3. Versuch. Deshalb zahlt erst der 2. Versuch mehr als den Einsatz – sonst ließe sich mit hohen
+  // Einsätzen beliebig Geld erspielen (geschickter Löser mit Listenkenntnis: etwa ×0,9–0,97).
+  const MULTS = [8, 1.5, 0.8, 0.4, 0.2, 0.1];
 
   // Mögliche Parolen je Sprache: bekannte Wörter mit genau fünf Buchstaben, nur A–Z (keine Umlaute, kein ß)
   const WORDS = {
@@ -146,7 +149,7 @@ GK.i18n.add({
   function start() {
     const s = state();
     if (s.round || busy) return;
-    if (!GK.casino.bet(s.bet)) {
+    if (!GK.casino.bet(s.bet, 'parole')) {
       GK.sound.play('denied');
       showMessage(GK.t('Nicht genug Dublonen für diesen Einsatz.'), 'loss');
       return;
